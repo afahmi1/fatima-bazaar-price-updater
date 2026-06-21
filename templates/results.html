@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Done — {{ results|length }} item(s) priced</h2>
+  <p class="muted">
+    Origin: <b>{% if state == 'california' %}California (+5%){% else %}Another state (+10%){% endif %}</b>.
+    Sell price = adjusted cost ÷ 0.625, rounded up to the next .49 / .99.
+    <b>{{ n_update }}</b> existing item(s) will have prices <b>updated</b> ·
+    <b>{{ n_new }}</b> new item(s) will be <b>created</b> — all in one file.
+  </p>
+  <a class="btn" href="{{ url_for('download', name=export_name) }}"
+     style="text-decoration:none;">⬇ Download Toast Item Library file ({{ export_name }})</a>
+  <a class="btn secondary" href="{{ url_for('index') }}"
+     style="text-decoration:none; margin-left:8px;">Process another invoice</a>
+  <p class="hint" style="margin-top:14px;">
+    One-file round trip — import in Toast Web at
+    <b>Item Library → ⋯ → Import items</b>. Rows marked
+    <span class="pill match">IN INVENTORY</span> carry their existing
+    <code>item id</code>, so Toast updates those prices in place; the rest are
+    created as new items. <b>Tip:</b> for your first run, test a few rows in a
+    hidden test category before importing the full file.
+  </p>
+</div>
+
+<div class="card">
+  <h2>Price list</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Item Name</th><th>Barcode</th><th>Category</th><th>By</th>
+        <th>Unit cost</th><th>+markup (cost)</th><th>Price</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in results %}
+      <tr>
+        <td>{{ r.name }}</td>
+        <td>{{ r.barcode or '—' }}</td>
+        <td class="muted">{{ r.category or '—' }}</td>
+        <td class="muted">{{ r.unit_label }}</td>
+        <td class="muted">${{ '%.4f'|format(r.base_unit_cost) }}</td>
+        <td class="muted">${{ '%.4f'|format(r.adjusted_cost) }}</td>
+        <td><b>${{ '%.2f'|format(r.sell_price) }}</b>{% if r.overridden %} <span class="hint" title="manual override">✎</span>{% endif %}</td>
+        <td>{% if r.matched %}<span class="pill match">IN INVENTORY</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint" style="margin-top:14px;">The CSV matches your Item Library export
+     columns. Existing items keep every original value and only their
+     <b>price</b> is changed; new items are added with name, category, price,
+     barcode and unit of measure.</p>
+</div>
+{% endblock %}

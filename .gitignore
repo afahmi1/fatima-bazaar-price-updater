@@ -1,0 +1,17 @@
+# Python environment (machine-specific — rebuilt by setup.command)
+.venv/
+__pycache__/
+*.pyc
+
+# Local data — NEVER publish. Includes your real Toast inventory, item memory,
+# uploaded invoices, and generated exports. The app recreates this folder.
+data/
+
+# macOS
+.DS_Store
+
+# Build artifacts
+*.zip
+
+# Claude Code local config
+.claude/

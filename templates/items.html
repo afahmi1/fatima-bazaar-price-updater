@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <h2 style="margin:0;">Item Memory</h2>
+    {% if items %}
+    <form action="{{ url_for('clear_items') }}" method="post"
+          onsubmit="return confirm('Clear ALL remembered items ({{ items|length }})? This cannot be undone. Your Toast inventory list is not affected.');"
+          style="margin:0;">
+      <button class="btn secondary" type="submit"
+              style="padding:8px 14px; color:#a02020;">Clear all memory</button>
+    </form>
+    {% endif %}
+  </div>
+  <p class="muted" style="margin-top:12px;">These are the items the app remembers.
+     Weight/quantity, SKU and category are reused automatically so you're never
+     asked twice. Delete one item to be re-prompted for it, or clear all to start
+     fresh. <b>This does not touch your uploaded Toast inventory list.</b></p>
+  {% if items %}
+  <table>
+    <thead>
+      <tr><th>Item Name</th><th>Priced by</th><th>SKU</th><th>Added</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>{{ it.display_name }}</td>
+        <td class="muted">{{ 'per lb (weight)' if it.pricing_type == 'weight' else 'per item (quantity)' }}</td>
+        <td>{{ it.sku }}</td>
+        <td class="muted">{{ it.created_at }}</td>
+        <td>
+          <form action="{{ url_for('delete_item', item_id=it.id) }}" method="post"
+                onsubmit="return confirm('Forget this item?');" style="margin:0;">
+            <button class="btn secondary" type="submit"
+                    style="padding:5px 12px; font-size:13px;">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="muted">No items remembered yet. Upload an invoice to get started.</p>
+  {% endif %}
+</div>
+{% endblock %}

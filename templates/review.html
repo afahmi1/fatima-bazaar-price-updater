@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Review items — {{ batch.filename }}</h2>
+  <p class="muted">
+    Origin: <b>{% if batch.state == 'california' %}California (+5%){% else %}Another state (+10%){% endif %}</b>.
+    Use <b>“Match to existing item”</b> on each row to link it to your Toast
+    inventory (updates that item's price) or leave it as a new item.
+  </p>
+  <p class="hint">
+    <span class="pill match">MATCHED</span> linked confidently (barcode or learned).
+    <span class="pill sugg">SUGGESTED</span> a likely match — <b>please confirm</b>.
+    <span class="pill new">NEW</span> will be created. Once you confirm a match,
+    the same vendor wording is remembered and matches automatically next time.</p>
+
+  <form action="{{ url_for('finalize', batch_id=batch.id) }}" method="post">
+    <input type="hidden" name="row_count" value="{{ batch.rows|length }}">
+
+    {% for r in batch.rows %}
+    {% set i = loop.index0 %}
+    <div class="card" style="background:#fafdfa; margin-bottom:14px; padding:16px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <label style="margin:0;">
+          <input type="checkbox" name="include_{{ i }}" checked>
+          Include this item
+        </label>
+        <span id="badge_{{ i }}">
+          {% if r.confident %}<span class="pill match">MATCHED</span>
+          {% elif r.matched %}<span class="pill sugg">SUGGESTED</span>
+          {% else %}<span class="pill new">NEW</span>{% endif %}
+        </span>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label>Item name</label>
+        <input type="text" name="name_{{ i }}" value="{{ r.name }}">
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label>Match to existing item</label>
+        <select name="match_{{ i }}" onchange="onMatch(this, {{ i }})">
+          {% for o in r.options %}
+          <option value="{{ o.value }}" {% if o.value == r.selected %}selected{% endif %}
+                  data-cg="{{ o.category_group }}" data-cat="{{ o.category }}">{{ o.label }}</option>
+          {% endfor %}
+        </select>
+        {% if r.matched and not r.confident %}
+        <div class="hint" style="color:#a05a00;">Pre-selected a likely match —
+           confirm it's the same product (and same size) before saving.</div>
+        {% endif %}
+      </div>
+
+      <div class="row-grid" style="margin-bottom:12px;">
+        <div>
+          <label>Priced by</label>
+          <select name="type_{{ i }}" onchange="syncLabel(this, {{ i }})">
+            <option value="quantity" {% if r.pricing_type=='quantity' %}selected{% endif %}>Quantity (per item)</option>
+            <option value="weight" {% if r.pricing_type=='weight' %}selected{% endif %}>Weight (per lb)</option>
+          </select>
+        </div>
+        <div>
+          <label>SKU / barcode (scan to search inventory, or N/A)</label>
+          <input type="text" name="sku_{{ i }}"
+                 value="{{ r.sku or 'N/A' }}" autocomplete="off"
+                 placeholder="Scan barcode…"
+                 onchange="skuLookup({{ i }})"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault(); skuLookup({{ i }});}">
+          <div class="hint" id="skuhint_{{ i }}">Scanning a known barcode adds it to the match list.</div>
+        </div>
+      </div>
+
+      <div class="row-grid" style="margin-bottom:12px;">
+        <div>
+          <label>Cost from invoice ($)</label>
+          <input type="number" step="0.0001" name="cost_{{ i }}"
+                 oninput="calcPrice({{ i }})"
+                 value="{{ '%.4f'|format(r.cost) if r.cost is not none else '' }}">
+          <div class="hint">Total cost on the invoice for this line.</div>
+        </div>
+        <div>
+          <label><span id="divlabel_{{ i }}">{% if r.pricing_type=='weight' %}Total weight (lbs){% else %}Number of units{% endif %}</span></label>
+          <input type="number" step="0.0001" name="divisor_{{ i }}"
+                 oninput="calcPrice({{ i }})"
+                 value="{{ '%g'|format(r.qty) if r.qty is not none else '1' }}">
+          <div class="hint">Cost ÷ this = per-unit cost.</div>
+        </div>
+      </div>
+
+      <div class="row-grid" style="margin-bottom:12px;">
+        <div>
+          <label>Sell price (auto-calculated)</label>
+          <input type="text" id="autoprice_{{ i }}" value="—" readonly
+                 style="background:#eef4ee; font-weight:600;">
+          <div class="hint">cost ÷ units × markup ÷ 0.625, rounded up to .49/.99.</div>
+        </div>
+        <div>
+          <label>Override price ($) — optional</label>
+          <input type="number" step="0.01" name="price_override_{{ i }}"
+                 placeholder="leave blank to use auto"
+                 oninput="markOverride({{ i }})">
+          <div class="hint" id="ovhint_{{ i }}">Enter a value only to override the auto price.</div>
+        </div>
+      </div>
+
+      <div class="row-grid">
+        <div>
+          <label>Category group{% if r.matched %} <span class="hint" style="font-weight:400;">(from inventory)</span>{% elif r.guessed %} <span class="hint" style="font-weight:400;">(best guess)</span>{% endif %}</label>
+          <input type="text" name="category_group_{{ i }}" value="{{ r.category_group }}"
+                 list="catgroups" placeholder="e.g. RETAIL">
+        </div>
+        <div>
+          <label>Category{% if r.matched %} <span class="hint" style="font-weight:400;">(from inventory)</span>{% elif r.guessed %} <span class="hint" style="font-weight:400;">(best guess — verify)</span>{% endif %}</label>
+          <input type="text" name="category_{{ i }}" value="{{ r.category }}"
+                 list="cats" placeholder="e.g. PRODUCE"
+                 {% if r.guessed %}style="background:#fffbe6;"{% endif %}>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if not batch.rows %}
+      <p class="muted">No items detected. Try a different file.</p>
+    {% endif %}
+
+    <div style="margin-top:18px;">
+      <button class="btn" type="submit">Calculate prices &amp; build Toast file →</button>
+      <a class="btn secondary" href="{{ url_for('index') }}"
+         style="text-decoration:none; margin-left:8px;">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<datalist id="catgroups">
+  <option value="RETAIL"><option value="GROCERY"><option value="PRODUCE">
+  <option value="BUTCHER"><option value="HOT FOOD">
+</datalist>
+<datalist id="cats">
+  <option value="PRODUCE"><option value="Deli"><option value="DATES">
+  <option value="BREAD & BREAD STICKS">
+</datalist>
+
+<script>
+  var STATE_MULT = {{ 1.05 if batch.state == 'california' else 1.10 }};
+  function charmUp(p) {
+    var base = Math.floor(p + 1e-9), f = p - base;
+    if (f <= 0.49 + 1e-9) return base + 0.49;
+    if (f <= 0.99 + 1e-9) return base + 0.99;
+    return base + 1.49;
+  }
+  function calcPrice(i) {
+    var cost = parseFloat(document.querySelector('[name=cost_' + i + ']').value) || 0;
+    var div = parseFloat(document.querySelector('[name=divisor_' + i + ']').value) || 1;
+    if (div === 0) div = 1;
+    var auto = charmUp((cost / div) * STATE_MULT / 0.625);
+    document.getElementById('autoprice_' + i).value = '$' + auto.toFixed(2);
+  }
+  function markOverride(i) {
+    var v = document.querySelector('[name=price_override_' + i + ']').value;
+    var hint = document.getElementById('ovhint_' + i);
+    var auto = document.getElementById('autoprice_' + i);
+    if (v && parseFloat(v) > 0) {
+      hint.innerHTML = '<b style="color:#a02020;">Override in use</b> — auto price ignored.';
+      auto.style.opacity = 0.4;
+    } else {
+      hint.textContent = 'Enter a value only to override the auto price.';
+      auto.style.opacity = 1;
+    }
+  }
+  function skuLookup(i) {
+    var box = document.querySelector('[name=sku_' + i + ']');
+    var sku = (box.value || '').trim();
+    var hint = document.getElementById('skuhint_' + i);
+    if (!sku || sku.toUpperCase() === 'N/A') return;
+    hint.textContent = 'Searching inventory…';
+    fetch('/lookup_sku?sku=' + encodeURIComponent(sku))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.found) {
+          hint.innerHTML = 'No inventory item with that barcode — it will be a NEW item.';
+          return;
+        }
+        var sel = document.querySelector('[name=match_' + i + ']');
+        var opt = Array.prototype.find.call(sel.options, function (o) {
+          return o.value === d.item_id;
+        });
+        if (!opt) {
+          opt = document.createElement('option');
+          opt.value = d.item_id;
+          sel.insertBefore(opt, sel.options[1] || null);
+        }
+        opt.textContent = d.label;
+        opt.dataset.cg = d.category_group;
+        opt.dataset.cat = d.category;
+        sel.value = d.item_id;
+        onMatch(sel, i);
+        hint.innerHTML = '<b style="color:#1B5E20;">Matched by SKU</b> and selected above.';
+      })
+      .catch(function () { hint.textContent = 'Lookup failed.'; });
+  }
+  function syncLabel(sel, i) {
+    var lbl = document.getElementById('divlabel_' + i);
+    lbl.textContent = sel.value === 'weight' ? 'Total weight (lbs)' : 'Number of units';
+    calcPrice(i);
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[id^="autoprice_"]').forEach(function (el) {
+      calcPrice(el.id.split('_')[1]);
+    });
+  });
+  function onMatch(sel, i) {
+    var opt = sel.options[sel.selectedIndex];
+    var isNew = sel.value === 'NEW';
+    // carry the chosen item's category into the fields
+    document.querySelector('[name="category_group_' + i + '"]').value = opt.dataset.cg || '';
+    document.querySelector('[name="category_' + i + '"]').value = opt.dataset.cat || '';
+    // update the badge
+    var badge = document.getElementById('badge_' + i);
+    badge.innerHTML = isNew
+      ? '<span class="pill new">NEW</span>'
+      : '<span class="pill match">MATCHED</span>';
+  }
+</script>
+{% endblock %}
