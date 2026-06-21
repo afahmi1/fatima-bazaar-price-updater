@@ -5,18 +5,42 @@ Word) into a finished price list. It figures your cost per item or per pound,
 adds the state markup, applies your sell-price formula, and exports an Excel
 table with **Item Name, SKU, Price**.
 
-Everything runs on your computer. No data is sent anywhere.
+Everything runs on your computer. No data is sent anywhere. The code lives on
+GitHub at <https://github.com/afahmi1/fatima-bazaar-price-updater>; your
+inventory and invoices are **never** published (the `data/` folder is ignored).
 
 ---
 
-## Install on a new Mac (one time)
+## Install from GitHub (recommended)
 
-1. Copy this whole **`Fatima Bazaar Price Updater`** folder to the Mac (USB,
-   AirDrop, Dropbox — anything).
-2. Double-click **`setup.command`**. It installs everything into the folder
-   itself. (If macOS blocks it, right-click → **Open**.)
-   - Needs Python 3. If it's missing, get it from
-     <https://www.python.org/downloads/> and run setup again.
+On any Mac with Git:
+
+```bash
+git clone https://github.com/afahmi1/fatima-bazaar-price-updater.git
+cd fatima-bazaar-price-updater
+```
+
+Then double-click **`setup.command`** once, then **`Start.command`**. Upload your
+Toast inventory CSV from the app's home page so matching works on that machine.
+
+## Updating to the latest version
+
+From the project folder:
+
+```bash
+git pull
+```
+
+If new Python packages were added, double-click **`setup.command`** again. Your
+data (inventory, item memory, learned matches) is local and untouched by updates.
+
+## Install by copying the folder (no Git)
+
+1. Double-click **`package_for_transfer.command`** here — it drops a clean
+   `.zip` on the Desktop (your data and the `.venv` are left out).
+2. Copy that `.zip` to the other Mac, unzip it.
+3. Double-click **`setup.command`** (installs into the folder; needs Python 3 —
+   if missing, get it from <https://www.python.org/downloads/> and run again).
 
 ## Use it
 
